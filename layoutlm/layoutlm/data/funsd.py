@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 
 class FunsdDataset(Dataset):
     def __init__(self, args, tokenizer, labels, pad_token_label_id, mode):
+        # todo take a systematic learning for ParallelTraining
+        # todo why only process the dataset in the first process in distributed traininng
+        # todo what does local_rank mean? and what does [-1,0] signify?
         if args.local_rank not in [-1, 0] and mode == "train":
             torch.distributed.barrier()  # Make sure only the first process in distributed training process the dataset, and the others will use the cache
 
@@ -97,7 +100,7 @@ class InputExample(object):
         self.words = words
         self.labels = labels
         self.boxes = boxes
-        self.actual_bboxes = actual_bboxes
+        self.actual_bboxes = actual_bboxes # todo what are the boxes and actual_bboxes
         self.file_name = file_name
         self.page_size = page_size
 
@@ -185,7 +188,7 @@ def read_examples_from_file(data_dir, mode):
                     actual_bboxes.append(actual_bbox)
                     page_size = [int(i) for i in isplits[2].split()]
                     file_name = isplits[3].strip()
-                else:
+                else: # todo since we have an assertion in row176, we can never get access into this block
                     # Examples could have no label for mode = "test"
                     labels.append("O")
         if words:
@@ -247,7 +250,7 @@ def convert_examples_to_features(
         for word, label, box, actual_bbox in zip(
             example.words, example.labels, example.boxes, example.actual_bboxes
         ):
-            word_tokens = tokenizer.tokenize(word)
+            word_tokens = tokenizer.tokenize(word) # todo learn about the tokenizer systematically
             tokens.extend(word_tokens)
             token_boxes.extend([box] * len(word_tokens))
             actual_bboxes.extend([actual_bbox] * len(word_tokens))

@@ -39,13 +39,13 @@ class LayoutlmEmbeddings(nn.Module):
         )
         self.h_position_embeddings = nn.Embedding(
             config.max_2d_position_embeddings, config.hidden_size
-        )
+        ) # todo but not in the model's embedding
         self.w_position_embeddings = nn.Embedding(
             config.max_2d_position_embeddings, config.hidden_size
-        )
+        ) # todo but not in the model's embedding
         self.token_type_embeddings = nn.Embedding(
             config.type_vocab_size, config.hidden_size
-        )
+        ) # this is the segment embedding
 
         # self.LayerNorm is not snake-cased to stick with TensorFlow model variable name and be able to load
         # any TensorFlow checkpoint file
@@ -60,17 +60,22 @@ class LayoutlmEmbeddings(nn.Module):
         position_ids=None,
         inputs_embeds=None,
     ):
+        # input_ids : [batch_size, seq_length]
         seq_length = input_ids.size(1)
         if position_ids is None:
+            # position_ids : [seq_length]
             position_ids = torch.arange(
                 seq_length, dtype=torch.long, device=input_ids.device
             )
+            # position_ids : [batch_size, seq_length]
             position_ids = position_ids.unsqueeze(0).expand_as(input_ids)
         if token_type_ids is None:
             token_type_ids = torch.zeros_like(input_ids)
 
+        # all the embeddings : [batch_size, seq_length, hidden_size]
         words_embeddings = self.word_embeddings(input_ids)
         position_embeddings = self.position_embeddings(position_ids)
+        # bbox : [batch_size, seq_length, 4] (4 is [left, upper, right, lower])
         left_position_embeddings = self.x_position_embeddings(bbox[:, :, 0])
         upper_position_embeddings = self.y_position_embeddings(bbox[:, :, 1])
         right_position_embeddings = self.x_position_embeddings(bbox[:, :, 2])
@@ -83,6 +88,8 @@ class LayoutlmEmbeddings(nn.Module):
         )
         token_type_embeddings = self.token_type_embeddings(token_type_ids)
 
+        # not concatenation but summation
+        # embedding : [batch_size, seq_length, hidden_size]
         embeddings = (
             words_embeddings
             + position_embeddings
@@ -132,6 +139,7 @@ class LayoutlmModel(BertModel):
         # So we can broadcast to [batch_size, num_heads, from_seq_length, to_seq_length]
         # this attention mask is more simple than the triangular masking of causal attention
         # used in OpenAI GPT, we just need to prepare the broadcast dimension here.
+        # todo cannot understand the remark
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
 
         # Since attention_mask is 1.0 for positions we want to attend and 0.0 for
@@ -139,6 +147,7 @@ class LayoutlmModel(BertModel):
         # positions we want to attend and -10000.0 for masked positions.
         # Since we are adding it to the raw scores before the softmax, this is
         # effectively the same as removing these entirely.
+        # todo why we need the conversion
         extended_attention_mask = extended_attention_mask.to(
             dtype=next(self.parameters()).dtype
         )  # fp16 compatibility
@@ -173,9 +182,12 @@ class LayoutlmModel(BertModel):
         encoder_outputs = self.encoder(
             embedding_output, extended_attention_mask, head_mask=head_mask
         )
+        # the output of BertEncoder : (output sequence, all hidden states of last layer, all attentions of last layer)
         sequence_output = encoder_outputs[0]
+        # Last layer hidden-state of the first token of the sequence (classification token) further processed by a Linear layer and a Tanh activation function.
         pooled_output = self.pooler(sequence_output)
 
+        # tuple(a, b) + tuple(c, d) = tuple(a, b, c, d)
         outputs = (sequence_output, pooled_output) + encoder_outputs[
             1:
         ]  # add hidden_states and attentions if they are here
@@ -217,9 +229,12 @@ class LayoutlmForTokenClassification(BertPreTrainedModel):
             head_mask=head_mask,
         )
 
+        # sequence_output : [batch_size, seq_length, hidden_state]
         sequence_output = outputs[0]
 
-        sequence_output = self.dropout(sequence_output)
+        sequence_output = self.dropout(sequence_output) # todo why we need a dropout at the output
+
+        # logits : [batch_size, seq_length, num_labels]
         logits = self.classifier(sequence_output)
 
         outputs = (logits,) + outputs[
@@ -229,7 +244,9 @@ class LayoutlmForTokenClassification(BertPreTrainedModel):
             loss_fct = CrossEntropyLoss()
             # Only keep active parts of the loss
             if attention_mask is not None:
+                # active_loss : [batch_size * seq_length]
                 active_loss = attention_mask.view(-1) == 1
+                # active_logits : [batch_size * seq_length, num_labels] before [active_loss]
                 active_logits = logits.view(-1, self.num_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
                 loss = loss_fct(active_logits, active_labels)

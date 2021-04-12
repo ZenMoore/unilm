@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_text(node):
+    # todo learn xpath systematically
     textnodes = node.xpath(".//text()")
     s = "".join([text for text in textnodes])
     return re.sub(r"\s+", " ", s).strip()
@@ -25,7 +26,7 @@ def get_prop(node, name):
     title = node.get("title")
     props = title.split(";")
     for prop in props:
-        (key, args) = prop.split(None, 1)
+        (key, args) = prop.split(None, 1) # todo (None, 1) 是个什么东西
         args = args.strip('"')
         if key == name:
             return args
@@ -43,6 +44,7 @@ class DocExample(object):
     def __repr__(self):
         return str(self.to_json_string())
 
+    # todo learn serialization systematically
     def to_dict(self):
         """Serializes this instance to a Python dictionary."""
         output = copy.deepcopy(self.__dict__)
@@ -53,7 +55,7 @@ class DocExample(object):
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
 
-class CdipProcessor(DataProcessor):
+class CdipProcessor(DataProcessor): # todo what is DataProcessor and how to use DataProcessor
     """Processor for the CDIP data set."""
 
     def worker(self, line):
@@ -67,7 +69,7 @@ class CdipProcessor(DataProcessor):
             lines = f.readlines()
         examples = []
         with tqdm(lines, desc="Gettting {} examples".format(mode)) as t, Pool(24) as p:
-            for example in p.imap(self.worker, lines):
+            for example in p.imap(self.worker, lines): # todo what is p.imap
                 examples.append(example)
                 t.update()
         return self._create_examples(examples, mode)
@@ -322,6 +324,7 @@ if __name__ == "__main__":
     args.max_seq_length = 512
     args.model_type = "bert"
     args.overwrite_cache = True
+    # Download vocabulary from huggingface.co and cache
     tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
     dataset = load_and_cache_examples(args, tokenizer, mode="test")
     print(len(dataset))

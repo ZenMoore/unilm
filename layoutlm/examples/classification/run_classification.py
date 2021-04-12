@@ -24,8 +24,8 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
-from layoutlm import LayoutlmConfig, LayoutlmForSequenceClassification
-from layoutlm.data.rvl_cdip import CdipProcessor, load_and_cache_examples
+from layoutlm.layoutlm.modeling.layoutlm import LayoutlmConfig, LayoutlmForSequenceClassification
+from layoutlm.layoutlm.data.rvl_cdip import CdipProcessor, load_and_cache_examples
 
 try:
     from torch.utils.tensorboard import SummaryWriter

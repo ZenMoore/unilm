@@ -49,7 +49,8 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
-from layoutlm import FunsdDataset, LayoutlmConfig, LayoutlmForTokenClassification
+from layoutlm.layoutlm.modeling.layoutlm import LayoutlmConfig, LayoutlmForTokenClassification
+from layoutlm.layoutlm.data.funsd import FunsdDataset
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ MODEL_CLASSES = {
     "roberta": (RobertaConfig, RobertaForTokenClassification, RobertaTokenizer),
     "layoutlm": (LayoutlmConfig, LayoutlmForTokenClassification, BertTokenizer),
 }
+
 
 
 def set_seed(args):
@@ -152,6 +154,7 @@ def train(  # noqa C901
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total
     )
+    # fp16 表示精度为16的浮点数
     if args.fp16:
         try:
             from apex import amp
@@ -218,6 +221,7 @@ def train(  # noqa C901
 
             outputs = model(**inputs)
             # model outputs are always tuple in pytorch-transformers (see doc)
+            # outputs : [sequence_output, pooled_output, (hidden_states), (attentions)]
             loss = outputs[0]
 
             if args.n_gpu > 1:
@@ -353,6 +357,7 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
             eval_loss += tmp_eval_loss.item()
         nb_eval_steps += 1
         if preds is None:
+            #
             preds = logits.detach().cpu().numpy()
             out_label_ids = inputs["labels"].detach().cpu().numpy()
         else:
@@ -382,9 +387,12 @@ def evaluate(args, model, tokenizer, labels, pad_token_label_id, mode, prefix=""
         "f1": f1_score(out_label_list, preds_list),
     }
 
+    # multi-class report
     report = classification_report(out_label_list, preds_list)
     logger.info("\n" + report)
 
+    # total report
+    # todo macro-mean or micro-mean?
     logger.info("***** Eval results %s *****", prefix)
     for key in sorted(results.keys()):
         logger.info("  %s = %s", key, str(results[key]))
